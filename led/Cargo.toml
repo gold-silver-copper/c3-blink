@@ -1,0 +1,31 @@
+[package]
+edition      = "2024"
+name         = "c3-blink"
+rust-version = "1.88"
+version      = "0.1.0"
+
+[[bin]]
+name = "c3-blink"
+path = "./src/bin/main.rs"
+
+[dependencies]
+esp-hal = { version = "~1.0", features = ["esp32c3", "unstable"] }
+esp-bootloader-esp-idf = { version = "0.4.0", features = ["esp32c3"] }
+esp-backtrace = { version = "0.15", features = ["esp32c3", "panic-handler", "println"] }
+esp-println = { version = "0.13", features = ["esp32c3", "jtag-serial"], default-features = false }
+mipidsi = "0.9"
+embedded-graphics = "0.8"
+critical-section = "1.2.0"
+embedded-hal-bus = "0.2"
+
+[profile.dev]
+opt-level = "s"
+
+[profile.release]
+codegen-units    = 1
+debug            = 2
+debug-assertions = false
+incremental      = false
+lto              = "fat"
+opt-level        = "s"
+overflow-checks  = false
