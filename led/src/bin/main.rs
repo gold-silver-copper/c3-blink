@@ -1,13 +1,9 @@
 #![no_std]
 #![no_main]
 
-use embedded_graphics::{
-    mono_font::{ascii::FONT_10X20, MonoTextStyle},
-    pixelcolor::Rgb565,
-    prelude::*,
-    primitives::{PrimitiveStyleBuilder, Rectangle},
-    text::Text,
-};
+extern crate alloc;
+
+use alloc::boxed::Box;
 use embedded_hal_bus::spi::ExclusiveDevice;
 use esp_backtrace as _;
 use esp_hal::{
@@ -20,9 +16,12 @@ use esp_hal::{
 use mipidsi::{
     interface::SpiInterface,
     models::ST7735s,
-    options::{ColorInversion, ColorOrder},
+    options::ColorOrder,
     Builder,
 };
+use mousefood::prelude::*;
+use ratatui::widgets::{Block, Paragraph};
+use ratatui::Terminal;
 
 esp_bootloader_esp_idf::esp_app_desc!();
 
@@ -30,6 +29,8 @@ esp_bootloader_esp_idf::esp_app_desc!();
 fn main() -> ! {
     let peripherals = esp_hal::init(esp_hal::Config::default());
     let delay = Delay::new();
+
+    esp_alloc::heap_allocator!(size: 64 * 1024);
 
     // SPI bus
     let spi_bus = Spi::new(
@@ -47,43 +48,32 @@ fn main() -> ! {
     // DC (RS) and RST pins
     let dc = Output::new(peripherals.GPIO4, Level::Low, OutputConfig::default());
     let mut rst = Output::new(peripherals.GPIO5, Level::Low, OutputConfig::default());  // start LOW
-    let mut d = Delay::new();
+    let d = Delay::new();
     d.delay_millis(100);   // hold reset low
     rst.set_high();
     d.delay_millis(200);   // wait for display to fully come up
 
     // Display interface
-    let mut buffer = [0u8; 512];
-    let di = SpiInterface::new(spi_device, dc, &mut buffer);
+    let buffer = Box::leak(Box::new([0u8; 512]));
+    let di = SpiInterface::new(spi_device, dc, buffer);
 
     let mut display = Builder::new(ST7735s, di)
         .reset_pin(rst)
         .display_size(128, 128)
-        .color_order(ColorOrder::Rgb)          // swap Bgr → Rgb
-        // remove invert_colors entirely
+        .color_order(ColorOrder::Rgb)
         .init(&mut Delay::new())
         .unwrap();
-    // Black background
-    display.clear(Rgb565::RED).unwrap();
 
-    // Red border
-    Rectangle::new(Point::new(5, 5), Size::new(118, 118))
-        .into_styled(
-            PrimitiveStyleBuilder::new()
-                .stroke_color(Rgb565::RED)
-                .stroke_width(3)
-                .build(),
-        )
-        .draw(&mut display)
-        .unwrap();
+    // Setup Mousefood and Ratatui
+    let backend = EmbeddedBackend::new(&mut display, Default::default());
+    let mut terminal = Terminal::new(backend).unwrap();
 
-    // Hello World text
-    let text_style = MonoTextStyle::new(&FONT_10X20, Rgb565::WHITE);
-    Text::new("Hello,", Point::new(14, 50), text_style)
-        .draw(&mut display)
-        .unwrap();
-    Text::new("World!", Point::new(14, 75), text_style)
-        .draw(&mut display)
+    terminal
+        .draw(|frame| {
+            let block = Block::bordered().title("Mousefood");
+            let paragraph = Paragraph::new("Hello from Mousefood!").block(block);
+            frame.render_widget(paragraph, frame.area());
+        })
         .unwrap();
 
     loop {}
