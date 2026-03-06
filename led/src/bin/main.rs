@@ -1,9 +1,8 @@
 #![no_std]
 #![no_main]
-
 extern crate alloc;
-
 use alloc::boxed::Box;
+use alloc::vec;
 use embedded_hal_bus::spi::ExclusiveDevice;
 use esp_backtrace as _;
 use esp_hal::{
@@ -16,12 +15,16 @@ use esp_hal::{
 use mipidsi::{
     interface::SpiInterface,
     models::ST7735s,
-    options::ColorOrder,
+    options::{ColorOrder, Orientation, Rotation},
     Builder,
 };
 use mousefood::prelude::*;
-use ratatui::widgets::{Block, Paragraph};
-use ratatui::Terminal;
+use ratatui::{
+    Terminal,
+    style::*,
+    text::{Line, Span},
+    widgets::{Block, Paragraph, Wrap},
+};
 
 esp_bootloader_esp_idf::esp_app_desc!();
 
@@ -29,10 +32,8 @@ esp_bootloader_esp_idf::esp_app_desc!();
 fn main() -> ! {
     let peripherals = esp_hal::init(esp_hal::Config::default());
     let delay = Delay::new();
-
     esp_alloc::heap_allocator!(size: 64 * 1024);
 
-    // SPI bus
     let spi_bus = Spi::new(
         peripherals.SPI2,
         SpiConfig::default().with_frequency(Rate::from_mhz(4)),
@@ -41,19 +42,16 @@ fn main() -> ! {
     .with_sck(peripherals.GPIO6)
     .with_mosi(peripherals.GPIO7);
 
-    // CS pin — GPIO10, wraps SpiBus into SpiDevice
     let cs = Output::new(peripherals.GPIO10, Level::High, OutputConfig::default());
     let spi_device = ExclusiveDevice::new(spi_bus, cs, delay).unwrap();
 
-    // DC (RS) and RST pins
     let dc = Output::new(peripherals.GPIO4, Level::Low, OutputConfig::default());
-    let mut rst = Output::new(peripherals.GPIO5, Level::Low, OutputConfig::default());  // start LOW
+    let mut rst = Output::new(peripherals.GPIO5, Level::Low, OutputConfig::default());
     let d = Delay::new();
-    d.delay_millis(100);   // hold reset low
+    d.delay_millis(100);
     rst.set_high();
-    d.delay_millis(200);   // wait for display to fully come up
+    d.delay_millis(200);
 
-    // Display interface
     let buffer = Box::leak(Box::new([0u8; 512]));
     let di = SpiInterface::new(spi_device, dc, buffer);
 
@@ -61,20 +59,47 @@ fn main() -> ! {
         .reset_pin(rst)
         .display_size(128, 128)
         .color_order(ColorOrder::Rgb)
+        .orientation(Orientation::new().rotate(Rotation::Deg90))
         .init(&mut Delay::new())
         .unwrap();
 
-    // Setup Mousefood and Ratatui
-    let backend = EmbeddedBackend::new(&mut display, Default::default());
+    let backend = EmbeddedBackend::new(&mut display, EmbeddedBackendConfig {
+        color_theme: ColorTheme::tokyo_night(),
+
+        ..Default::default()
+    });
     let mut terminal = Terminal::new(backend).unwrap();
 
-    terminal
-        .draw(|frame| {
-            let block = Block::bordered().title("Mousefood");
-            let paragraph = Paragraph::new("Hello from Mousefood!").block(block);
-            frame.render_widget(paragraph, frame.area());
-        })
-        .unwrap();
+    let mut frame_count: usize = 0;
 
-    loop {}
+    loop {
+        let count = frame_count;
+        terminal.draw(|frame| {
+            let line = Line::from(vec![
+                Span::styled(alloc::format!("F:{count} "), Style::new().yellow()),
+                Span::styled("RED ",   Style::new().fg(Color::Red)),
+                Span::styled("DIM ",   Style::new().fg(Color::Red).add_modifier(Modifier::DIM)),
+                Span::styled("UNDR ",  Style::new().add_modifier(Modifier::UNDERLINED)),
+                Span::styled("SLOW ",  Style::new().add_modifier(Modifier::SLOW_BLINK)),
+                Span::styled("FAST ",  Style::new().add_modifier(Modifier::RAPID_BLINK)),
+                Span::styled("REV ",   Style::new().add_modifier(Modifier::REVERSED)),
+                Span::styled("HIDE ",  Style::new().add_modifier(Modifier::HIDDEN)),
+                Span::styled("XOUT ",  Style::new().add_modifier(Modifier::CROSSED_OUT)),
+                Span::styled("GHOST ", Style::new().fg(Color::DarkGray).add_modifier(Modifier::DIM | Modifier::ITALIC)),
+                Span::styled("ALARM ", Style::new().fg(Color::Red).add_modifier(Modifier::RAPID_BLINK | Modifier::REVERSED)),
+                Span::styled("DEAD ",  Style::new().fg(Color::Gray).add_modifier(Modifier::CROSSED_OUT | Modifier::DIM)),
+                Span::styled("SHOUT ", Style::new().fg(Color::Yellow).add_modifier(Modifier::BOLD | Modifier::UNDERLINED)),
+                Span::styled("HAUNT ", Style::new().fg(Color::Magenta).add_modifier(Modifier::SLOW_BLINK | Modifier::DIM)),
+                Span::styled("CRIT",   Style::new().fg(Color::White).bg(Color::Red).add_modifier(Modifier::BOLD | Modifier::RAPID_BLINK)),
+            ]);
+
+            let paragraph = Paragraph::new(vec![line]).wrap(Wrap { trim: true });
+            let block = Block::bordered()
+                .border_style(Style::new().yellow())
+                .title("Mods");
+            frame.render_widget(paragraph.block(block), frame.area());
+        }).unwrap();
+
+        frame_count = frame_count.wrapping_add(1);
+    }
 }

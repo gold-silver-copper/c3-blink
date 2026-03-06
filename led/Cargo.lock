@@ -326,6 +326,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "embedded-graphics-unicodefonts"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a82ef1580d1bff3e89bd3e68069acb24910b66001aaab1738ce9de8d03d2ab1e"
+dependencies = [
+ "embedded-graphics",
+]
+
+[[package]]
 name = "embedded-hal"
 version = "0.2.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -953,6 +962,7 @@ version = "0.4.0"
 source = "git+https://github.com/gold-silver-copper/mousefood?branch=main#c48752324ad6ce00bca154e450b196fbc55eaf97"
 dependencies = [
  "embedded-graphics",
+ "embedded-graphics-unicodefonts",
  "ratatui-core",
  "thiserror",
 ]

@@ -19,7 +19,7 @@ embedded-graphics = "0.8"
 critical-section = "1.2.0"
 embedded-hal-bus = "0.2"
 portable-atomic = { version = "1", default-features = false }
-mousefood = { git = "https://github.com/gold-silver-copper/mousefood", branch = "main", default-features = false }
+mousefood = { git = "https://github.com/gold-silver-copper/mousefood", branch = "main", features = ["blink"]}
 ratatui = { version = "0.30.0", default-features = false, features = ["portable-atomic"] }
 
 [profile.dev]
